@@ -1,3 +1,15 @@
-from django.shortcuts import render
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-# Create your views here.
+
+class SlidesAPIView(APIView):
+    """Slides API"""
+
+    def post(self, request):
+        """Given topics return slide images and text"""
+
+        # Get text from wikipedia
+        # Clean text
+        # Download Images
+
+        return Response(request.data)
