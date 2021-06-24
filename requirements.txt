@@ -4,3 +4,8 @@ flake8==3.9.0
 wikipedia-api
 wikipedia~=1.4.0
 pysbd~=0.3.4
+dj-database-url==0.4.2
+gunicorn==19.7.1
+psycopg2-binary
+pytz==2017.3
+whitenoise==3.3.1
