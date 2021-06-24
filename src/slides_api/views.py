@@ -1,7 +1,5 @@
-import wikipediaapi
-import wikipedia
 import pysbd
-
+import wikipediaapi
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,14 +7,21 @@ from rest_framework.views import APIView
 from .serializers import SlideFeaturesSerializer
 
 
+def check_wikipedia_page_exists(subject):
+    """Given a subject, verify if it has a page on wikipedia"""
+    return True
+
+
 class SlidesAPIView(APIView):
-    """Slides API - Given slide features (subject, topics, sources)
-    returns the slide images and texts"""
+    """Given a subject, max_slides and language returns the slide images and \
+    texts."""
+    USELESS_SECTIONS = ['Ver também', 'Referências', 'See also', 'References']
 
     serializer_class = SlideFeaturesSerializer
 
     @staticmethod
     def get_sentences(text):
+        """Breaks section text in sentences, max of 3 sentences per topic"""
         seg = pysbd.Segmenter(language="en", clean=False)
         if len(text) > 512 * 6:
             text = text[:512 * 6]
@@ -49,25 +54,32 @@ class SlidesAPIView(APIView):
 
         return sentences_data
 
-    def fetch_data_from_wikipedia(self, slide_subject, language='pt'):
-        wikipedia.set_lang(language)
-        references = [wikipedia.page(slide_subject).url]
-        wikipedia_images = wikipedia.page(slide_subject).images
+    def fetch_data_from_wikipedia(self, slide_subject,
+                                  max_slides, language='pt'):
 
         wiki = wikipediaapi.Wikipedia(language)
+
         subject_page = wiki.page(slide_subject)
+        references = [subject_page.fullurl]
+
         summary_sentences = self.get_sentences(
             subject_page.summary.replace('\n', ''))
 
-        topics = [{'title': slide_subject,
+        intro_title = slide_subject
+        if language == 'pt':
+            intro_title = 'Introdução'
+        elif language == 'en':
+            intro_title = 'Introduction'
+
+        topics = [{'title': intro_title,
                    'subtitle': '',
                    'sentences': summary_sentences,
                    }]
-        num_topics = 0
-        num_subtopics = 0
+
         for section in subject_page.sections:
-            if len(topics) >= int(len(subject_page.sections) * 0.7):
+            if section.title in self.USELESS_SECTIONS:
                 break
+
             if len(section.sections) == 0:
                 topic_text = section.full_text().replace(
                     section.title, '').replace('\n', '')
@@ -78,7 +90,7 @@ class SlidesAPIView(APIView):
                          'subtitle': '',
                          'sentences': section_sentences,
                          })
-                    num_topics += 1
+
             num_section_subtopics = 0
             for subsection in section.sections:
                 subtopic_text = subsection.full_text().replace(
@@ -90,19 +102,21 @@ class SlidesAPIView(APIView):
                          'subtitle': subsection.title,
                          'sentences': subsection_sentences,
                          })
-                    num_subtopics += 1
                     num_section_subtopics += 1
-                    if num_section_subtopics >= 3:
+                    if num_section_subtopics >= 3 or len(topics) >= \
+                            max_slides - 2:
                         break
+
+            if len(topics) >= max_slides - 2:
+                break
 
         return {
             'topics': topics,
             'references': references,
-            'wikipedia_images': wikipedia_images
         }
 
     def post(self, request):
-        """Given topics return slide images and text"""
+        """Given a subject return slide images and text"""
 
         serializer = SlideFeaturesSerializer(data=request.data)
 
@@ -110,19 +124,18 @@ class SlidesAPIView(APIView):
             slide_features = serializer.validated_data
 
             slide_subject = slide_features['subject']
-            num_slides = slide_features['num_slides']
+            max_slides = slide_features['max_slides']
             language = slide_features['language']
 
-            wikipedia_original_content = self.fetch_data_from_wikipedia(
-                slide_subject,
-                language)
+            wikipedia_content = self.fetch_data_from_wikipedia(
+                slide_subject, max_slides, language)
 
-            # print(len(wikipedia_original_content['topics']))
+            print(len(wikipedia_content['topics']))
 
             # Clean the content
 
             # Get IBM Watson interpretation
 
-            return Response(wikipedia_original_content)
+            return Response(wikipedia_content)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
