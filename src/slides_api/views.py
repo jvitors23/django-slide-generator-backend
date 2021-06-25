@@ -111,6 +111,7 @@ class SlidesAPIView(APIView):
                 break
 
         return {
+            'subject': slide_subject,
             'topics': topics,
             'references': references,
         }
